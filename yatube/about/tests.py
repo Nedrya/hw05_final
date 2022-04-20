@@ -7,7 +7,7 @@ User = get_user_model()
 
 
 class PostURLTests(TestCase):
-    
+
     def setUp(self):
         # Создаем неавторизованный клиент
         self.guest_client = Client()

@@ -41,7 +41,7 @@ class PostURLTests(TestCase):
         response = self.guest_client.get('/auth/login/')
         self.assertEqual(response.status_code, HTTPStatus.OK,
                          'ОШИБКА: страница логина работает не верно!')
-    
+
     def test_login_autorization(self):
         'Проверка страниы логина для авторизированных'
         response = self.authorized_client.get('/auth/login/')
