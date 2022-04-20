@@ -218,9 +218,9 @@ class PostPagesTests(TestCase):
         self.assertEqual(Follow.objects.count(), follow_count + 1,
                          'Ошибка:Число подписчиков не увеличелось..')
 
-        follower = Post.objects.filter(author__followers__user=self.user2
+        follower = Post.objects.filter(author__following__user=self.user2
                                        ).exists()
-        ne_follower = Post.objects.filter(author__followers__user=self.user
+        ne_follower = Post.objects.filter(author__following__user=self.user
                                           ).exists()
         # Проверяем что подписки не появляются у другого пользователя.
         self.assertFalse(ne_follower)
