@@ -1,4 +1,8 @@
-from django.test import TestCase, Client
+import shutil
+import tempfile
+from django.conf import settings
+from django.test import TestCase, Client, override_settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django import forms
@@ -9,7 +13,11 @@ from ..models import Follow
 
 User = get_user_model()
 
+# Создаем временную папку для медиа-файлов;
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostPagesTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -23,11 +31,26 @@ class PostPagesTests(TestCase):
             title='Группа',
             slug='t_slug',
         )
+        # Картинка
+        cls.small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        cls.uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=cls.small_gif,
+            content_type='image/gif'
+        )
         # Пост от пользователя TestName
         cls.post = Post.objects.create(
             text='Пост1',
             author=User.objects.get(username='TestName'),
-            group=cls.group
+            group=cls.group,
+            image=cls.uploaded
         )
         cls.follow = Follow.objects.create(
             user=cls.user2,
@@ -57,6 +80,15 @@ class PostPagesTests(TestCase):
             'user': cls.user2.username,
             'author': cls.post.author
         }
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        # Модуль shutil - библиотека Python с удобными инструментами
+        # для управления файлами и директориями:
+        # создание, удаление, копирование, перемещение  папок и файлов
+        # Метод shutil.rmtree удаляет директорию и всё её содержимое
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         # Создаем авторизованные клиенты
@@ -93,11 +125,14 @@ class PostPagesTests(TestCase):
         first_object = response.context['page_obj'][0]
         index_text = first_object.text
         index_author = first_object.author.username
+        test_image = first_object.image
         index_group = first_object.group.slug
         self.assertEqual(index_text, self.post.text, 'Ошибка: Text поста')
         self.assertEqual(index_author, self.post.author.username,
                          'Ошибка: Username')
         self.assertEqual(index_group, self.post.group.slug, 'Ошибка: Slug')
+        self.assertEqual(test_image, self.post.image,
+                         'ОШИБКА: Картинки нет')
 
     def test_index_context(self):
         """Шаблон index сформирован с правильным контекстом."""
@@ -107,11 +142,14 @@ class PostPagesTests(TestCase):
         first_object = response.context['page_obj'][0]
         index_text = first_object.text
         index_author = first_object.author.username
+        test_image = first_object.image
         index_group = first_object.group.slug
         self.assertEqual(index_text, self.post.text, 'Ошибка: Text поста')
         self.assertEqual(index_author, self.post.author.username,
                          'Ошибка: Username')
         self.assertEqual(index_group, self.post.group.slug, 'Ошибка: Slug')
+        self.assertEqual(test_image, self.post.image,
+                         'ОШИБКА: Картинки нет')
 
     def test_profile_context(self):
         """Шаблон profile сформирован с правильным контекстом."""
@@ -122,11 +160,9 @@ class PostPagesTests(TestCase):
                                               )
         first_object = response.context['page_obj'][0]
         # Теперь проверяем, что что содержимое постов на странице
-        # соответствует ожиданиям
-        # У поста есть текст, автор, группа (которая в свою очередь
-        # имеет название, slug и описание)
         test_text_0 = first_object.text
         test_author_0 = first_object.author
+        test_image_0 = first_object.image
         test_title_0 = first_object.group.title
         test_group_slug_0 = first_object.group.slug
         self.assertEqual(test_text_0, self.post.text,
@@ -137,6 +173,8 @@ class PostPagesTests(TestCase):
                          'ОШИБКА: Title не совпадают!')
         self.assertEqual(test_group_slug_0, self.group.slug,
                          'ОШИБКА: Слаг не совпадает!')
+        self.assertEqual(test_image_0, self.post.image,
+                         'ОШИБКА: Картинки нет')
 
     def test_post_detail_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
@@ -144,6 +182,7 @@ class PostPagesTests(TestCase):
         context = response.context.get('post')
         self.assertEqual(context.text, self.post.text)
         self.assertEqual(context.id, self.post.id)
+        self.assertEqual(context.image, self.post.image)
         self.assertEqual(context.author.username,
                          self.post.author.username)
         self.assertEqual(context.group,
