@@ -29,6 +29,9 @@ class PostPagesTests(TestCase):
             author=User.objects.get(username='TestName'),
             group=cls.group
         )
+        cls.follow = Follow.objects.create(
+            user=cls.user2,
+            author=cls.user)
 
         cls.urls = {
             'index': reverse('posts:index'),
@@ -49,6 +52,10 @@ class PostPagesTests(TestCase):
                 'posts:post_edit',
                 kwargs={'post_id': cls.post.id}
             ),
+        }
+        cls.form_data = {
+            'user': cls.user2.username,
+            'author': cls.post.author
         }
 
     def setUp(self):
@@ -196,41 +203,61 @@ class PostPagesTests(TestCase):
         new_content = response
         self.assertEquals(response, new_content)
 
-    def test_following(self):
-        """Подписка и отписка на авторов работает"""
+    def test_following_1(self):
+        """Подписка на авторов работает"""
         follow_count = Follow.objects.count()
-        form_data = {
-            'user': self.user2.username,
-            'author': self.user.username
-        }
-        response = self.authorized_client2.post(reverse('posts:profile_follow',
-                                                kwargs={
-                                                    'username':
-                                                    self.user.username}),
-                                                data=form_data,
-                                                follow=True)
+
+        # Подписываемся
+        response = self.authorized_client.post(reverse('posts:profile_follow',
+                                               kwargs={
+                                                   'username':
+                                                   self.user2.username}),
+                                               data=self.form_data,
+                                               follow=True)
         # Проверяем, сработал ли редирект
         self.assertRedirects(response, reverse('posts:profile',
                                                kwargs={
                                                    'username':
-                                                   f'{self.user.username}'}))
+                                                   f'{self.user2.username}'}))
         # Проверяем, сработала ли подписка
         self.assertEqual(Follow.objects.count(), follow_count + 1,
                          'Ошибка:Число подписчиков не увеличелось..')
 
+        # Проверяем что подписки появляются у подписавшегося.
         follower = Post.objects.filter(author__following__user=self.user2
                                        ).exists()
-        ne_follower = Post.objects.filter(author__following__user=self.user
-                                          ).exists()
-        # Проверяем что подписки не появляются у другого пользователя.
-        self.assertFalse(ne_follower)
-        # Проверяем что подписки появляются у подписавшегося.
         self.assertTrue(follower)
 
-        # Проверяем отписку
-        self.authorized_client.post(Follow.objects.all().delete())
-        self.assertEqual(Follow.objects.count(), follow_count,
+    def test_following_2(self):
+        """Отписка от автора работает"""
+        follow_count = Follow.objects.count()
+        response = self.authorized_client2.post(reverse(
+                                                'posts:profile_unfollow',
+                                                kwargs={
+                                                    'username':
+                                                    self.post.author.username}
+                                                ))
+        # Проверяем, сработал ли редирект
+        self.assertRedirects(response, reverse('posts:profile',
+                             kwargs={
+                                 'username':
+                                 f'{self.post.author.username}'}))
+        self.assertEqual(Follow.objects.count(), follow_count - 1,
                          'Ошибка:Число подписчиков не уменьшелось..')
+
+    def test_following_3(self):
+        """Проверяем что посты автора не появляются у не подписанного
+         пользователя."""
+
+        ne_follower = Post.objects.filter(author__following__user=self.user
+                                          ).exists()
+        self.assertFalse(ne_follower)
+
+    def test_following_4(self):
+        """Проверяем что посты автора появляются у подписанного."""
+        follower = Post.objects.filter(author__following__user=self.user2
+                                       ).exists()
+        self.assertTrue(follower)
 
 
 class ContextPostViewsTest(TestCase):

@@ -1,8 +1,9 @@
+from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404
-from .models import Post, Group, User, Comment, Follow
+from .models import Post, Group, User, Follow
 from .forms import PostForm, CommentForm
 
 
@@ -27,14 +28,7 @@ def index(request):
 # В урл мы ждем парметр, и нужно его прередать в функцию для использования
 def group_posts(request, slug):
     title = 'Записи сообщества'
-    # Функция get_object_or_404 получает по заданным критериям объект
-    # из базы данных или возвращает сообщение об ошибке, если объект не найден.
-    # В нашем случае в переменную group будут переданы объекты модели Group,
-    # поле slug у которых соответствует значению slug в запросе
     group = get_object_or_404(Group, slug=slug)
-    # Метод .filter позволяет ограничить поиск по критериям.
-    # Это аналог добавления
-    # условия WHERE group_id = {group_id}
     posts = group.posts.all()
     paginator = Paginator(posts, 10,)
     page_number = request.GET.get('page')
@@ -73,7 +67,7 @@ def profile(request, username):
 def post_detail(request, post_id):
     post = get_object_or_404(Post, id=post_id)
     post_count = Post.objects.filter(author=post.author).count()
-    comments = Comment.objects.filter(post=post_id)
+    comments = post.comments.all()
     form = CommentForm()
     context = {
         'post_count': post_count,
@@ -133,8 +127,7 @@ def add_comment(request, post_id):
 def follow_index(request):
     'Просмотр постов на кого подписан'
     post = Post.objects.filter(author__following__user=request.user)
-    not_post = Post.objects.filter(author__following__user=request.user
-                                   ).exists()
+    not_post = post.exists()
     paginator = Paginator(post, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -159,7 +152,7 @@ def profile_follow(request, username):
 def profile_unfollow(request, username):
     author = get_object_or_404(User, username=username)
     if author != request.user:
-        Follow.objects.get(user=request.user, author=author).delete()
+        Follow.objects.filter(user=request.user, author=author).delete()
         return redirect("posts:profile", author.username)
     else:
-        print('Вы не можете отписаться от себя.')
+        return HttpResponse('Вы не можете отписаться от себя.')
